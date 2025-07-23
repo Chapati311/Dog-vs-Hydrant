@@ -39,7 +39,8 @@ const hydrant = {
     x: WIDTH-160, y: HEIGHT/2-50, w: 40, h: 90,
     color: '#e74c3c',
     health: 28, maxHealth: 28,
-    cooldown: 0
+    cooldown: 0,
+    shootPaused: false // New property for hydrant shooting pause
 };
 // Projectiles
 let dogLasers = [];
@@ -51,6 +52,28 @@ document.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if
 document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 canvas.addEventListener('mousedown', () => { if(state==='instructions') startCountdown(); });
 canvas.addEventListener('touchstart', e => { if(state==='instructions') startCountdown(); });
+
+// Detect mobile/small screen
+function isMobile() {
+    return window.innerWidth < 700 || window.innerHeight < 500;
+}
+
+// Scale factors for mobile
+let scale = 1;
+let dogScale = 1, hydrantScale = 1;
+function updateScales() {
+    if (isMobile()) {
+        scale = 0.6;
+        dogScale = 0.6;
+        hydrantScale = 0.6;
+    } else {
+        scale = 1;
+        dogScale = 1;
+        hydrantScale = 1;
+    }
+}
+window.addEventListener('resize', updateScales);
+updateScales();
 
 // Font utility for consistent style
 function setGameFont(size, weight = 'bold') {
@@ -86,15 +109,23 @@ function startCountdown() {
     state = 'countdown';
     countdown = 3;
     countdownTimer = Date.now();
-    setTimeout(() => { countdown = 2; setTimeout(() => { countdown = 1; setTimeout(() => { countdown = 0; state = 'playing'; }, 1000); }, 1000); }, 1000);
+    setTimeout(() => { countdown = 2; setTimeout(() => { countdown = 1; setTimeout(() => {
+        countdown = 0; state = 'playing';
+        hydrant.shootPaused = true;
+        setTimeout(() => { hydrant.shootPaused = false; }, 1000); // 1s pause
+    }, 1000); }, 1000); }, 1000);
 }
 
 function resetGame() {
-    dog.x = 120; dog.y = HEIGHT/2; dog.vx = 0; dog.vy = 0; dog.cooldown = 0; dog.alive = true;
-    hydrant.x = WIDTH-160; hydrant.y = HEIGHT/2-50; hydrant.health = hydrant.maxHealth; hydrant.cooldown = 0;
+    updateScales();
+    dog.x = 120 * scale; dog.y = HEIGHT/2; dog.vx = 0; dog.vy = 0; dog.cooldown = 0; dog.alive = true;
+    dog.w = 120 * dogScale; dog.h = 60 * dogScale;
+    hydrant.x = WIDTH-160 * scale; hydrant.y = HEIGHT/2-50 * scale; hydrant.health = hydrant.maxHealth; hydrant.cooldown = 0;
+    hydrant.w = 40 * hydrantScale; hydrant.h = 90 * hydrantScale;
     dogLasers = [];
     hydrantShots = [];
     state = 'instructions';
+    hydrant.shootPaused = false;
 }
 
 function update() {
@@ -120,7 +151,7 @@ function update() {
     dog.y = Math.max(0, Math.min(HEIGHT-dog.h, dog.y));
     // Shoot
     if ((((keys[' '] || keys['space']) && dog.cooldown<=0) || (touchShoot && dog.cooldown<=0))) {
-        dogLasers.push({ x: dog.x + 120, y: dog.y+40, w: 22, h: 10, speed: 22 }); // Shoots from mouth
+        dogLasers.push({ x: dog.x + 120 * dogScale, y: dog.y+40 * dogScale, w: 22 * dogScale, h: 10 * dogScale, speed: 22 }); // Shoots from mouth
         dog.cooldown = 14;
         touchShoot = false; // Reset after single shot
     }
@@ -136,16 +167,16 @@ function update() {
         }
         if (dogLasers[i].x > WIDTH) dogLasers.splice(i,1);
     }
-    // Hydrant AI
-    if (hydrant.cooldown<=0) {
+    // Hydrant AI: add 1s pause after countdown
+    if (hydrant.cooldown<=0 && !hydrant.shootPaused && state==='playing') {
         let dx = (dog.x+dog.w/2)-(hydrant.x+hydrant.w/2);
         let dy = (dog.y+dog.h/2)-(hydrant.y+hydrant.h/2);
         let mag = Math.sqrt(dx*dx+dy*dy);
         hydrantShots.push({
             x: hydrant.x,
-            y: hydrant.y+hydrant.h/2-8,
-            w: 20, h: 16,
-            vx: 16*dx/mag + Math.random()*2-1, // FASTER
+            y: hydrant.y+hydrant.h/2-8*hydrantScale,
+            w: 20*hydrantScale, h: 16*hydrantScale,
+            vx: 16*dx/mag + Math.random()*2-1,
             vy: 16*dy/mag + Math.random()*2-1
         });
         hydrant.cooldown = Math.max(12, 36-Math.floor((hydrant.maxHealth-hydrant.health)/2));
@@ -216,9 +247,12 @@ function drawInstructions() {
     setGameFont(18);
     ctx.fillStyle = '#555';
     ctx.fillText('Goal: Destroy the hydrant without getting hit!', WIDTH/2, HEIGHT/2+70);
+    setGameFont(18);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Tip: Rotate your phone and play horizontally!', WIDTH/2, HEIGHT/2+100);
     setGameFont(22);
     ctx.fillStyle = '#009688';
-    ctx.fillText('Tap, click, or press any key to start!', WIDTH/2, HEIGHT/2+120);
+    ctx.fillText('Tap, click, or press any key to start!', WIDTH/2, HEIGHT/2+140);
     ctx.restore();
 }
 
@@ -245,65 +279,65 @@ function drawDog(d) {
     // Body (elongated oval, brown)
     ctx.fillStyle = d.color1;
     ctx.beginPath();
-    ctx.ellipse(d.x+38, d.y+28, 34, 18, 0.1, 0, 2*Math.PI); // body
+    ctx.ellipse(d.x+38*dogScale, d.y+28*dogScale, 34*dogScale, 18*dogScale, 0.1, 0, 2*Math.PI); // body
     ctx.fill(); ctx.stroke();
     // Back legs (hind legs, comic paw)
     ctx.fillStyle = d.color2;
     ctx.beginPath();
-    ctx.ellipse(d.x+20, d.y+44, 8, 14, 0.2, 0, 2*Math.PI);
+    ctx.ellipse(d.x+20*dogScale, d.y+44*dogScale, 8*dogScale, 14*dogScale, 0.2, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(d.x+44, d.y+46, 8, 14, 0.1, 0, 2*Math.PI);
+    ctx.ellipse(d.x+44*dogScale, d.y+46*dogScale, 8*dogScale, 14*dogScale, 0.1, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Front legs
     ctx.beginPath();
-    ctx.ellipse(d.x+60, d.y+44, 7, 13, 0.1, 0, 2*Math.PI);
+    ctx.ellipse(d.x+60*dogScale, d.y+44*dogScale, 7*dogScale, 13*dogScale, 0.1, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(d.x+74, d.y+42, 7, 13, 0.1, 0, 2*Math.PI);
+    ctx.ellipse(d.x+74*dogScale, d.y+42*dogScale, 7*dogScale, 13*dogScale, 0.1, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Tail (brown, comic curve, more upright)
     ctx.strokeStyle = d.color1;
     ctx.lineWidth = 7;
     ctx.beginPath();
-    ctx.moveTo(d.x+8, d.y+28);
-    ctx.quadraticCurveTo(d.x-10, d.y+2, d.x+18, d.y-10);
+    ctx.moveTo(d.x+8*dogScale, d.y+28*dogScale);
+    ctx.quadraticCurveTo(d.x-10*dogScale, d.y+2*dogScale, d.x+18*dogScale, d.y-10*dogScale);
     ctx.stroke();
     // Head (white, round, with snout)
     ctx.lineWidth = 5;
     ctx.strokeStyle = '#222';
     ctx.fillStyle = d.color2;
     ctx.beginPath();
-    ctx.ellipse(d.x+88, d.y+18, 18, 15, -0.1, 0, 2*Math.PI);
+    ctx.ellipse(d.x+88*dogScale, d.y+18*dogScale, 18*dogScale, 15*dogScale, -0.1, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Snout (white, oval, more pronounced)
     ctx.beginPath();
-    ctx.ellipse(d.x+104, d.y+22, 12, 8, 0, 0, 2*Math.PI);
+    ctx.ellipse(d.x+104*dogScale, d.y+22*dogScale, 12*dogScale, 8*dogScale, 0, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Nose (brown, larger)
     ctx.fillStyle = d.color1;
     ctx.beginPath();
-    ctx.arc(d.x+114, d.y+22, 4, 0, 2*Math.PI);
+    ctx.arc(d.x+114*dogScale, d.y+22*dogScale, 4*dogScale, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Ears (brown, one floppy, one upright, more realistic)
     ctx.fillStyle = d.color1;
     ctx.beginPath();
-    ctx.ellipse(d.x+92, d.y+2, 6, 16, -0.7, 0, 2*Math.PI);
+    ctx.ellipse(d.x+92*dogScale, d.y+2*dogScale, 6*dogScale, 16*dogScale, -0.7, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(d.x+80, d.y+4, 5, 13, 0.5, 0, 2*Math.PI);
+    ctx.ellipse(d.x+80*dogScale, d.y+4*dogScale, 5*dogScale, 13*dogScale, 0.5, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Eyes (comic, closer to snout)
     ctx.fillStyle = '#222';
     ctx.beginPath();
-    ctx.arc(d.x+98, d.y+16, 3, 0, 2*Math.PI);
-    ctx.arc(d.x+106, d.y+16, 3, 0, 2*Math.PI);
+    ctx.arc(d.x+98*dogScale, d.y+16*dogScale, 3*dogScale, 0, 2*Math.PI);
+    ctx.arc(d.x+106*dogScale, d.y+16*dogScale, 3*dogScale, 0, 2*Math.PI);
     ctx.fill();
     // Smile
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(d.x+104, d.y+26, 7, 0.2, 0.9);
+    ctx.arc(d.x+104*dogScale, d.y+26*dogScale, 7*dogScale, 0.2, 0.9);
     ctx.stroke();
     ctx.restore();
 }
@@ -315,42 +349,42 @@ function drawHydrant(h) {
     // Main body (tall, cylindrical, red)
     ctx.fillStyle = h.color;
     ctx.beginPath();
-    ctx.ellipse(h.x+20, h.y+55, 22, 48, 0, 0, 2*Math.PI);
+    ctx.ellipse(h.x+20*hydrantScale, h.y+55*hydrantScale, 22*hydrantScale, 48*hydrantScale, 0, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Top dome (wider, more hydrant-like)
     ctx.fillStyle = '#c0392b';
     ctx.beginPath();
-    ctx.ellipse(h.x+20, h.y+12, 22, 12, 0, 0, 2*Math.PI);
+    ctx.ellipse(h.x+20*hydrantScale, h.y+12*hydrantScale, 22*hydrantScale, 12*hydrantScale, 0, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Cap (gray, more defined)
     ctx.fillStyle = '#aaa';
-    ctx.fillRect(h.x+6, h.y, 28, 12);
-    ctx.strokeRect(h.x+6, h.y, 28, 12);
+    ctx.fillRect(h.x+6*hydrantScale, h.y*hydrantScale, 28*hydrantScale, 12*hydrantScale);
+    ctx.strokeRect(h.x+6*hydrantScale, h.y*hydrantScale, 28*hydrantScale, 12*hydrantScale);
     // Side bolts (bigger, more hydrant-like)
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(h.x-8, h.y+55, 8, 0, 2*Math.PI);
-    ctx.arc(h.x+48, h.y+55, 8, 0, 2*Math.PI);
+    ctx.arc(h.x-8*hydrantScale, h.y+55*hydrantScale, 8*hydrantScale, 0, 2*Math.PI);
+    ctx.arc(h.x+48*hydrantScale, h.y+55*hydrantScale, 8*hydrantScale, 0, 2*Math.PI);
     ctx.fill(); ctx.stroke();
     // Face (angry eyes, mouth)
     ctx.fillStyle = '#222';
     ctx.beginPath();
-    ctx.arc(h.x+14, h.y+50, 4, 0, Math.PI);
-    ctx.arc(h.x+26, h.y+50, 4, 0, Math.PI);
+    ctx.arc(h.x+14*hydrantScale, h.y+50*hydrantScale, 4*hydrantScale, 0, Math.PI);
+    ctx.arc(h.x+26*hydrantScale, h.y+50*hydrantScale, 4*hydrantScale, 0, Math.PI);
     ctx.fill();
     // Mouth
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(h.x+20, h.y+68, 9, 0.2, 0.9);
+    ctx.arc(h.x+20*hydrantScale, h.y+68*hydrantScale, 9*hydrantScale, 0.2, 0.9);
     ctx.stroke();
     // Water spray effect when shooting
     if (h.cooldown > 20) {
         ctx.strokeStyle = '#00f';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(h.x+20, h.y+55);
-        ctx.lineTo(h.x-40, h.y+55+Math.random()*40-20);
+        ctx.moveTo(h.x+20*hydrantScale, h.y+55*hydrantScale);
+        ctx.lineTo(h.x-40*hydrantScale, h.y+55*hydrantScale+Math.random()*40*hydrantScale-20*hydrantScale);
         ctx.stroke();
     }
     ctx.restore();
